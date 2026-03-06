@@ -16,3 +16,5 @@ sympy>=1.10.1
 scikit-learn
 bs4
 seaborn
+
+openai

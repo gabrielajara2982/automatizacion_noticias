@@ -1,14 +1,18 @@
 import os
 import asyncio
+from pathlib import Path
 from playwright.async_api import async_playwright
 from openai import OpenAI
 from dotenv import load_dotenv
 
-
 # =========================
 # CONFIGURACIÓN
 # =========================
-load_dotenv()  # Carga variables del .env
+
+# Construye la ruta absoluta al .env en la raíz del proyecto
+dotenv_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path)
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 if not OPENAI_API_KEY:
@@ -31,8 +35,9 @@ async def obtener_links_y_textos():
         await page.goto(BASE_URL, timeout=60000)
         await page.wait_for_timeout(3000)
 
-        # Extraer hrefs
-        hrefs = await page.locator("a").all_attribute_values("href")
+        # Extraer hrefs correctamente
+        href_elements = await page.locator("a").all()
+        hrefs = [await el.get_attribute("href") for el in href_elements]
         noticias = []
         for href in hrefs:
             if href and ("/noticias/" in href or "/202" in href):
@@ -43,13 +48,20 @@ async def obtener_links_y_textos():
         # eliminar duplicados y limitar a 3 noticias
         noticias = list(set(noticias))[:3]
 
-        # Extraer texto de cada noticia
+        # Extraer texto de cada noticia usando selector actualizado
         textos = []
         for link in noticias:
             await page.goto(link, timeout=60000)
-            await page.wait_for_timeout(3000)
-            paragraphs = await page.locator("article p").all_text_contents()
-            texto = "\n".join(paragraphs)
+            
+            # Esperar que el contenedor principal del texto sea visible
+            try:
+                await page.locator("div.ue-l-article__body p").first.wait_for(state="visible", timeout=10000)
+                paragraphs = await page.locator("div.ue-l-article__body p").all_text_contents()
+                texto = "\n".join(paragraphs)
+            except:
+                # Si no encuentra el contenedor, deja el texto vacío
+                texto = ""
+
             textos.append((link, texto))
 
         await browser.close()
